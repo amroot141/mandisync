@@ -9,7 +9,7 @@ services:
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.8
+        value: 3.12.2
       - key: MONGO_URI
         value: mongodb+srv://abhi20singhbhati_db_user:4D6ZmP790VgmSqgX@cluster0.sgu4gdt.mongodb.net/?retryWrites=true&w=majority
       - key: MONGO_DB_NAME
