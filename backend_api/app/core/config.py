@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # Model Artifact Path
     MODEL_PATH: str = os.getenv(
         "MODEL_PATH",
-        str(BASE_DIR / "ml_engine" / "models" / "price_predictor_v1.pkl")
+        str(BASE_DIR / "ml_engine" / "models" / "price_predictor_v1_xgb.json")
     )
     
     # ONDC Protocol Configurations

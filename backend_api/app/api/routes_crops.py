@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 from uuid import uuid4
 from bson import ObjectId
+from pymongo import ReturnDocument
 from fastapi import APIRouter, HTTPException, Query, status
 
 from backend_api.app.models.schemas import (
@@ -364,7 +365,7 @@ async def update_crop_listing(crop_id: str, patch: Union[ONDCCropListingUpdate, 
     res = await collection.find_one_and_update(
         query,
         {"$set": update_data},
-        return_document=True
+        return_document=ReturnDocument.AFTER
     )
 
     if not res:
