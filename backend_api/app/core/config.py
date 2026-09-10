@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "mandisync_db")
     MONGO_TIMEOUT_MS: int = 10000
     
+    # Redis Configuration
+    REDIS_URI: str = os.getenv("REDIS_URI", "redis://default:4bkabryirVFrFKriMizPVdKwlHYtvwH5@window-megaclear-receipt-44278.db.redis.io:17635")
+    
     # Model Artifact Path
     MODEL_PATH: str = os.getenv(
         "MODEL_PATH",

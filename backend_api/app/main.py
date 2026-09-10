@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend_api.app.core.config import settings
 from backend_api.app.services.database import db_manager
+from backend_api.app.services.redis_manager import redis_manager
 from backend_api.app.services.ml_runner import ml_runner
 
 from backend_api.app.api.routes_crops import router as crops_router
@@ -26,6 +27,8 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing MandiSync AI Services...")
     # 1. Connect to MongoDB Cluster
     await db_manager.connect_to_mongo()
+    # 1.5 Connect to Redis
+    await redis_manager.connect()
     # 2. Initialize ML Model Engine
     try:
         ml_runner.load_model()
@@ -35,6 +38,7 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down MandiSync AI Services...")
+    await redis_manager.close()
     await db_manager.close_mongo_connection()
 
 
@@ -106,6 +110,7 @@ async def root(request: Request):
         "status": "online",
         "version": settings.VERSION,
         "database_connected": db_manager.is_connected,
+        "redis_connected": redis_manager.is_connected,
         "ml_model_loaded": ml_runner.is_ready,
         "documentation": "/docs",
         "web_app": "/app/"
@@ -117,6 +122,7 @@ async def health_check():
     return {
         "status": "healthy" if db_manager.is_connected else "degraded",
         "database": "connected" if db_manager.is_connected else "disconnected",
+        "redis": "connected" if redis_manager.is_connected else "disconnected",
         "ml_model": "loaded" if ml_runner.is_ready else "not_loaded"
     }
 

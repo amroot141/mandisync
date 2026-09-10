@@ -15,6 +15,7 @@ from backend_api.app.models.schemas import (
     WeightUnit
 )
 from backend_api.app.services.database import db_manager, insert_document, query_documents
+from backend_api.app.services.redis_manager import redis_manager
 from backend_api.app.services.ml_runner import ml_runner
 
 logger = logging.getLogger("mandisync.crops")
@@ -92,6 +93,7 @@ async def create_crop_listing(listing: Union[ONDCCropListing, FarmerCropListingC
 
         inserted_id = await insert_document("crops", doc)
         doc["_id"] = inserted_id
+        await redis_manager.delete_pattern("crops:list:*")
         return doc
 
     else:
@@ -126,6 +128,7 @@ async def create_crop_listing(listing: Union[ONDCCropListing, FarmerCropListingC
             
         inserted_id = await insert_document("crops", doc)
         doc["_id"] = inserted_id
+        await redis_manager.delete_pattern("crops:list:*")
         logger.info(f"Created crop listing '{listing.id}' in 'crops' collection.")
         return doc
 
@@ -147,6 +150,16 @@ async def list_crop_listings(
     skip: int = Query(0, ge=0, description="Number of listings to skip"),
     limit: int = Query(50, ge=1, le=200, description="Max listings to return")
 ):
+    category_val = category.value if category else "None"
+    grade_val = grade.value if grade else "None"
+    cache_key_raw = f"crops:list:{crop_name}:{commodity}:{location}:{mandi}:{status}:{category_val}:{grade_val}:{skip}:{limit}"
+    import hashlib
+    cache_key = "crops:list:" + hashlib.md5(cache_key_raw.encode()).hexdigest()
+    
+    cached_data = await redis_manager.get_cache(cache_key)
+    if cached_data:
+        return cached_data
+
     query: Dict[str, Any] = {}
 
     # Active status filter (treat missing status as active for backward compatibility)
@@ -190,6 +203,7 @@ async def list_crop_listings(
         query["grade"] = grade.value
 
     docs = await query_documents("crops", filter_query=query, limit=limit, skip=skip, sort=[("_id", -1)])
+    await redis_manager.set_cache(cache_key, docs, expire_seconds=300)
     return docs
 
 
@@ -200,6 +214,11 @@ async def list_crop_listings(
     description="Fetch a single crop listing by its SKU ID or MongoDB ObjectId."
 )
 async def get_crop_listing(crop_id: str):
+    cache_key = f"crop:{crop_id}"
+    cached_data = await redis_manager.get_cache(cache_key)
+    if cached_data:
+        return cached_data
+
     collection = db_manager.get_collection("crops")
 
     doc = await collection.find_one({"id": crop_id})
@@ -212,7 +231,9 @@ async def get_crop_listing(crop_id: str):
             detail=f"Crop listing '{crop_id}' not found."
         )
 
-    return clean_mongo_doc(doc)
+    cleaned_doc = clean_mongo_doc(doc)
+    await redis_manager.set_cache(cache_key, cleaned_doc, expire_seconds=300)
+    return cleaned_doc
 
 
 @router.put(
@@ -278,6 +299,8 @@ async def replace_crop_listing(crop_id: str, listing: Union[ONDCCropListing, Far
         doc["_id"] = existing["_id"]
 
     await collection.replace_one(query, doc)
+    await redis_manager.delete_pattern("crops:list:*")
+    await redis_manager.delete_cache(f"crop:{crop_id}")
     logger.info(f"Replaced crop listing '{crop_id}'.")
     return clean_mongo_doc(doc)
 
@@ -351,6 +374,8 @@ async def update_crop_listing(crop_id: str, patch: Union[ONDCCropListingUpdate, 
         )
 
     logger.info(f"Updated crop listing '{crop_id}'.")
+    await redis_manager.delete_pattern("crops:list:*")
+    await redis_manager.delete_cache(f"crop:{crop_id}")
     return clean_mongo_doc(res)
 
 
@@ -373,4 +398,6 @@ async def delete_crop_listing(crop_id: str):
         )
 
     logger.info(f"Deleted crop listing '{crop_id}'.")
+    await redis_manager.delete_pattern("crops:list:*")
+    await redis_manager.delete_cache(f"crop:{crop_id}")
     return {"status": "success", "message": f"Crop listing '{crop_id}' deleted successfully."}
