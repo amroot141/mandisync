@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 import joblib
 import numpy as np
 import pandas as pd
+from xgboost import XGBRegressor
 
 from backend_api.app.core.config import settings
 from backend_api.app.models.schemas import PredictionRequest, PredictionResponse
@@ -36,7 +37,8 @@ class MLRunner:
         if getattr(self, "_initialized", False):
             return
         self.model_data: Optional[Dict[str, Any]] = None
-        self.pipeline: Optional[Any] = None
+        self.preprocessor: Optional[Any] = None
+        self.regressor: Optional[XGBRegressor] = None
         self.model_version: str = "unknown"
         self.metrics: Dict[str, Any] = {}
         self.rmse: float = 60.0  # Default fallback uncertainty band
@@ -48,22 +50,30 @@ class MLRunner:
         Securely load the serialized XGBoost model pipeline into memory.
         """
         path = Path(model_path or settings.MODEL_PATH)
-        logger.info(f"Loading ML Model artifact from: {path.resolve()}")
+        logger.info(f"Loading ML Model artifacts starting from: {path.resolve()}")
 
+        models_dir = path.parent
         if not path.exists():
             # If not found directly, attempt search in parent directories
-            fallback_path = Path(__file__).resolve().parent.parent.parent.parent / "ml_engine" / "models" / "price_predictor_v1.pkl"
-            if fallback_path.exists():
-                path = fallback_path
+            fallback_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml_engine" / "models"
+            if (fallback_dir / "price_predictor_v1_xgb.json").exists():
+                models_dir = fallback_dir
 
-        if not path.exists():
-            logger.error(f"Model artifact file does not exist at {path}!")
-            raise FileNotFoundError(f"Model artifact not found at {path}")
+        xgb_model_path = models_dir / "price_predictor_v1_xgb.json"
+        preprocessor_path = models_dir / "price_predictor_v1_preprocessor.joblib"
+        metadata_path = models_dir / "price_predictor_v1_metadata.joblib"
+
+        if not xgb_model_path.exists() or not preprocessor_path.exists() or not metadata_path.exists():
+            logger.error(f"Model artifact files do not exist at {models_dir}!")
+            raise FileNotFoundError(f"Model artifacts not found at {models_dir}")
 
         try:
-            self.model_data = joblib.load(path)
-            self.pipeline = self.model_data.get("pipeline")
-            self.model_version = self.model_data.get("version", "price_predictor_v1.pkl")
+            self.preprocessor = joblib.load(preprocessor_path)
+            self.regressor = XGBRegressor()
+            self.regressor.load_model(xgb_model_path)
+            self.model_data = joblib.load(metadata_path)
+            
+            self.model_version = self.model_data.get("version", "price_predictor_v1")
             self.metrics = self.model_data.get("metrics", {})
             self.rmse = float(self.metrics.get("RMSE", 58.69))
             self.is_ready = True
@@ -89,7 +99,7 @@ class MLRunner:
         """
         Execute high-performance inference for Mandi peak price forecast.
         """
-        if not self.is_ready or self.pipeline is None:
+        if not self.is_ready or self.regressor is None or self.preprocessor is None:
             raise RuntimeError("ML Model is not loaded or ready in memory.")
 
         start_time = time.perf_counter()
@@ -136,7 +146,8 @@ class MLRunner:
             "day_of_year": int(day_of_year)
         }])
 
-        raw_pred = self.pipeline.predict(input_df)[0]
+        transformed_df = self.preprocessor.transform(input_df)
+        raw_pred = self.regressor.predict(transformed_df)[0]
         predicted_max = round(float(raw_pred), 2)
 
         # 90% Confidence bounds (± 1.645 * RMSE)

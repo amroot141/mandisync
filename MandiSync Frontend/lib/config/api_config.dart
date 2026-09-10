@@ -42,18 +42,19 @@ class ApiConfig {
   static String get login => "$apiBase/auth/login";
   static String get registerUser => "$apiBase/users/register";
   static String get registerAuth => "$apiBase/auth/register";
+  static String get ondcCropListings => "$apiBase/ondc/crops";
   static String get registerMock => "$apiBase/register";
   static String get usersMe => "$apiBase/users/me";
 
   // Farmer Crop Listings (Section 2 & 6)
   static String get crops => "$apiBase/crops";
-  static String get ondcCropListings => "$apiBase/ondc/crop_listings";
 
   // Agmarknet Mandi Prices (Section 3)
   static String get marketPrices => "$apiBase/market-prices";
 
   // AI Price Forecasting (Section 4)
   static String get predict => "$apiBase/predict";
+  static String get forecast => "$apiBase/predict/forecast";
 
   // Logistics & Backhaul Matching (Section 5)
   static String get logisticsQuotes => "$apiBase/logistics/quotes";

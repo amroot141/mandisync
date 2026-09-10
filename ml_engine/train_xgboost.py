@@ -169,10 +169,15 @@ async def train_and_serialize():
     # Step 5: Serialize Model Artifact
     models_dir = REPO_ROOT / "ml_engine" / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
-    artifact_path = models_dir / "price_predictor_v1.pkl"
+    
+    xgb_model_path = models_dir / "price_predictor_v1_xgb.json"
+    pipeline.named_steps["regressor"].save_model(xgb_model_path)
+    
+    preprocessor_path = models_dir / "price_predictor_v1_preprocessor.joblib"
+    joblib.dump(pipeline.named_steps["preprocessor"], preprocessor_path)
 
+    metadata_path = models_dir / "price_predictor_v1_metadata.joblib"
     payload = {
-        "pipeline": pipeline,
         "categorical_features": CATEGORICAL_FEATURES,
         "numerical_features": NUMERICAL_FEATURES,
         "target_feature": TARGET_FEATURE,
@@ -180,20 +185,23 @@ async def train_and_serialize():
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "version": "price_predictor_v1"
     }
-
-    joblib.dump(payload, artifact_path)
-    logger.info(f"Model successfully serialized to: {artifact_path}")
+    joblib.dump(payload, metadata_path)
+    logger.info(f"Model successfully serialized to: {models_dir}")
 
     # Verify reload
-    loaded = joblib.load(artifact_path)
+    loaded_preprocessor = joblib.load(preprocessor_path)
+    loaded_model = XGBRegressor()
+    loaded_model.load_model(xgb_model_path)
+
     test_sample = X_test.iloc[0:1]
-    test_prediction = loaded["pipeline"].predict(test_sample)[0]
+    X_test_transformed = loaded_preprocessor.transform(test_sample)
+    test_prediction = loaded_model.predict(X_test_transformed)[0]
     actual = y_test[0]
     logger.info(
         f"Verification Test Prediction for {test_sample['commodity'].values[0]} at {test_sample['market'].values[0]}: "
         f"Predicted Rs. {test_prediction:.2f} (Actual: Rs. {actual:.2f})"
     )
-    return str(artifact_path)
+    return str(xgb_model_path)
 
 
 if __name__ == "__main__":

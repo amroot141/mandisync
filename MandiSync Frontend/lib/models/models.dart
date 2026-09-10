@@ -371,3 +371,65 @@ class OndcItemModel {
     );
   }
 }
+
+class ForecastPointModel {
+  final int dayIndex;
+  final String date;
+  final String dayName;
+  final double predictedPrice;
+  final double confidenceLow;
+  final double confidenceHigh;
+  final double recommendedListingPrice;
+
+  ForecastPointModel({
+    required this.dayIndex,
+    required this.date,
+    required this.dayName,
+    required this.predictedPrice,
+    required this.confidenceLow,
+    required this.confidenceHigh,
+    required this.recommendedListingPrice,
+  });
+
+  factory ForecastPointModel.fromJson(Map<String, dynamic> json) {
+    return ForecastPointModel(
+      dayIndex: json['day_index'] ?? 0,
+      date: json['date'] ?? '',
+      dayName: json['day_name'] ?? '',
+      predictedPrice: (json['predicted_price'] as num?)?.toDouble() ?? 0.0,
+      confidenceLow: (json['confidence_low'] as num?)?.toDouble() ?? 0.0,
+      confidenceHigh: (json['confidence_high'] as num?)?.toDouble() ?? 0.0,
+      recommendedListingPrice: (json['recommended_listing_price'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class ForecastResponseModel {
+  final String status;
+  final String commodity;
+  final String market;
+  final int days;
+  final List<ForecastPointModel> forecast;
+  final String modelVersion;
+
+  ForecastResponseModel({
+    required this.status,
+    required this.commodity,
+    required this.market,
+    required this.days,
+    required this.forecast,
+    required this.modelVersion,
+  });
+
+  factory ForecastResponseModel.fromJson(Map<String, dynamic> json) {
+    final list = json['forecast'] as List? ?? [];
+    return ForecastResponseModel(
+      status: json['status'] ?? 'success',
+      commodity: json['commodity'] ?? '',
+      market: json['market'] ?? '',
+      days: json['days'] ?? 7,
+      forecast: list.map((e) => ForecastPointModel.fromJson(e)).toList(),
+      modelVersion: json['model_version'] ?? '',
+    );
+  }
+}
